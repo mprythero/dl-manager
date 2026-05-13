@@ -198,18 +198,24 @@ export default function App() {
     const t = setTimeout(async () => {
       setUserSearching(true);
       try {
-        // Use $search instead of $filter — more reliable, supports partial matches
-        // Requires ConsistencyLevel header
         const token = await getToken();
+        // $search requires ConsistencyLevel: eventual, no $orderby allowed
         const res = await fetch(
-          `https://graph.microsoft.com/v1.0/users?$search="displayName:${userSearch}" OR "mail:${userSearch}"&$select=id,displayName,mail,userPrincipalName,jobTitle&$top=10&$orderby=displayName`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              ConsistencyLevel: "eventual",
-            }
-          }
+          `https://graph.microsoft.com/v1.0/users?$search="displayName:${encodeURIComponent(userSearch)}"&$select=id,displayName,mail,userPrincipalName,jobTitle&$top=15`,
+          { headers: { Authorization: `Bearer ${token}`, ConsistencyLevel: "eventual" } }
         );
+        if (!res.ok) {
+          // Fallback to simple startswith filter if $search fails
+          const res2 = await fetch(
+            `https://graph.microsoft.com/v1.0/users?$filter=startswith(displayName,'${encodeURIComponent(userSearch)}')&$select=id,displayName,mail,userPrincipalName,jobTitle&$top=15`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const data2 = await res2.json();
+          const results2 = Array.isArray(data2?.value) ? data2.value : [];
+          const memberIds2 = new Set(members.map(m => m.id));
+          setUserResults(results2.filter(u => !memberIds2.has(u.id)));
+          return;
+        }
         const data = await res.json();
         const results = Array.isArray(data?.value) ? data.value : [];
         const memberIds = new Set(members.map(m => m.id));
@@ -566,7 +572,7 @@ export default function App() {
               style={{width:"100%",padding:"9px 10px 9px 30px",borderRadius:8,border:"1.5px solid #d1d5db",fontSize:13,outline:"none",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}/>
           </div>
           {userSearching && <div style={{display:"flex",alignItems:"center",gap:7,color:"#94a3b8",fontSize:13,padding:"8px 4px"}}><Spinner size={12} color="#94a3b8"/> Searching…</div>}
-          {userResults.map(u=>(
+          {(Array.isArray(userResults) ? userResults : []).map(u=>(
             <div key={u.id} className="arow" style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 8px",borderRadius:8,transition:"background .12s"}}>
               <div style={{display:"flex",alignItems:"center",gap:9}}>
                 <Avatar name={u.displayName} size={32}/>
