@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { msalInstance, graphScopes, graphRequest, CLIENT_ID } from "./auth";
+import { msalInstance, graphScopes, graphRequest, getToken, CLIENT_ID } from "./auth";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function initials(name) {
@@ -198,12 +198,22 @@ export default function App() {
     const t = setTimeout(async () => {
       setUserSearching(true);
       try {
-        const data = await graphRequest("GET",
-          `/users?$filter=startswith(displayName,'${encodeURIComponent(userSearch)}') or startswith(mail,'${encodeURIComponent(userSearch)}')&$select=id,displayName,mail,userPrincipalName,jobTitle&$top=10`
+        // Use $search instead of $filter — more reliable, supports partial matches
+        // Requires ConsistencyLevel header
+        const token = await getToken();
+        const res = await fetch(
+          `https://graph.microsoft.com/v1.0/users?$search="displayName:${userSearch}" OR "mail:${userSearch}"&$select=id,displayName,mail,userPrincipalName,jobTitle&$top=10&$orderby=displayName`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              ConsistencyLevel: "eventual",
+            }
+          }
         );
-        // Filter out already-members
+        const data = await res.json();
+        const results = Array.isArray(data?.value) ? data.value : [];
         const memberIds = new Set(members.map(m => m.id));
-        setUserResults((data?.value || []).filter(u => !memberIds.has(u.id)));
+        setUserResults(results.filter(u => !memberIds.has(u.id)));
       } catch(e) { setUserResults([]); }
       finally { setUserSearching(false); }
     }, 400);
