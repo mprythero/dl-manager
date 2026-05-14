@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { msalInstance, graphScopes, graphRequest, getToken, CLIENT_ID } from "./auth";
+import { msalInstance, graphScopes, graphRequest, graphRequestAsApp, getToken, CLIENT_ID } from "./auth";
 
 // ─── Font Awesome icon helper ─────────────────────────────────────────────────
 function Fa({ icon, style={} }) {
@@ -293,7 +293,7 @@ export default function App() {
     if (!editGuestName.trim() || !editingGuest) return;
     setSavingGuest(true);
     try {
-      await graphRequest("PATCH", `/users/${editingGuest.id}`, { displayName: editGuestName.trim() });
+      await graphRequestAsApp("PATCH", `/users/${editingGuest.id}`, { displayName: editGuestName.trim() });
       setMembers(p=>p.map(m=>m.id===editingGuest.id?{...m,displayName:editGuestName.trim()}:m));
       showToast("Guest name updated");
       setEditingGuest(null); setEditGuestName("");
